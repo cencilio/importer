@@ -30,11 +30,8 @@ function send_data_processed() {
 	document.getElementById('loading_data_cencilio').style.display = 'block';
 	document.getElementById('loading_subtitle_cencilio').innerHTML = filename;
 	var wb = XLSX.utils.book_new();
-	let xlsDoc = [];
 	var reader = new FileReader();
-	let json_string = '{';
-	json_string += '"userId":"' + renderer.config['userId'] + '",';
-	this.await = true;
+
 	if (typeof renderer.check_transversal !== 'undefined') {
 		this.editing = renderer.check_transversal; //user basis
 	}
@@ -42,123 +39,41 @@ function send_data_processed() {
 		this.editing = renderer.page; //program basis
 	}
 	try {
-		json_string += '"sheet' + this.editing + '":';
-		let xlsTable = document.createElement('table');
-		this.total_rows = '';
-		this.total_cols = '';
-		let first_out = false;
-		let col_out = false;
-		let first_passed = false;
+		let data_rows = [];
 		for (var R = 0; R < renderer.excel_data[this.editing].length; R++) {
-			try {
-				if (document.getElementById('render_row_' + R).discarded === true) {
-					if (R === 0) {
-						if (first_passed === false) {
-							first_out = true;
+			let row_values = {};
+			if (!document.getElementById('render_row_' + R).discarded) {
+
+				for (var C = 0; C < renderer.excel_data[this.editing][R].length; C++) {
+					try {
+						let field_selected = document.getElementById('select_all_selector_' + C);
+						if (field_selected.value != '--') {
+							this.key = field_selected.value;
+							this.data = (renderer.excel_data[this.editing][R][C] !== null) ? renderer.excel_data[this.editing][R][C] : '';
+							row_values[this.key]= this.data;
+						} else {
+							continue
 						}
+
+
 					}
-					continue;
-				}
-				else if (document.getElementById('render_row_' + (R + 1)) !== null) {
-					//add syntax to keep storage after only z0			
-					if (document.getElementById('render_row_' + (R + 1)).discarded === true) {
-						this.await = false;
+					catch (error) {
+						this.key = 'New';	//system key
+						this.data = '';
+						console.info(error);
 					}
-					else {
-						this.await = true;
-					}
+
 				}
-				else {
-					//storing is irrelevant							
-				}
-			}
-			catch (error) { //row with id does not exist
-				console.info(error);
+			} else {
 				continue;
 			}
-			if (R === 0) {
-				//open page
-				this.json_row = '{"rows":[';
-				this.col = '[{';
-			}
-			else if (first_out === true) {
-				//start page without first row
-				this.json_row = '{"rows":[';
-				this.col = '[{';
-				first_out = false;
-				first_passed = true;
-			}
-			else {
-				if (document.getElementById('render_row_' + (R - 1)).discarded === true) {
-					//must have await syntax
-					this.col = ',{';
-				}
-				else {
-					//does not need await syntax
-					this.col = '{';
-				}
-			}
-			this.json_row += '';
-			//open row
-			this.row = '{';
-			for (var C = 0; C < renderer.excel_data[this.editing][R].length; C++) {
 
-				try {
-					this.key = renderer.dom_factor[C][renderer.dom_factor[C].length -1].key; //user key
-				}
-				catch (error) {
-					this.key = 'New';	//system key		
-					console.info(error);
-				}
-				if (renderer.excel_data[this.editing][R][C] === null) {
-					this.data = '';
-				}
-				else {
-					this.data = renderer.excel_data[this.editing][R][C];
-				}
-				//add row
-				this.row += '"' + this.key + '": "' + this.data + '"';
-				this.col += '"' + this.key + '": "' + this.data + '"';
-				if (C + 1 < renderer.excel_data[this.editing][R].length) {
-					this.row += ',';
-					this.col += ',';
-				}
-			}
-			//close row
-			this.row += '}';
-			if (R + 1 < renderer.excel_data[this.editing].length) {
-				//close column
-				this.col += '}';
-				//waiting for next checked info at both
-				if (this.await === true) {
-					this.col += ',';
-					this.row += ',';
-				}
-				else {
-					//rows are not disclosed in new documents						
-				}
-			}
-			else {
-				this.col += '}';
-			}
-			this.total_rows += this.row;
-			this.total_cols += this.col;
+			data_rows.push(row_values);
+
 		}
-		//finish info										
-		this.total_cols += ']';
-		XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(JSON.parse(this.total_cols)), renderer.page_names[this.editing]);
-		this.json_row += this.total_rows;
-		//closes while not awaiting
-		this.json_row += ']';
-		json_string += this.json_row;
-		//annotates while not awaiting
-		xlsDoc.push(xlsTable);
 
-		json_string += '}}';
-		let jsonData = JSON.stringify(json_string);
-		/* make the worksheet */
-		/* generate an XLSX file */
-		//XLSX.writeFile(wb, '[cencilio]'+document.getElementById('cencilio_file_name').innerHTML);					
+		let json_string = '{"userId":"'+ renderer.config['userId']+ '","sheet'+ this.editing + '":{"rows":'+JSON.stringify(data_rows)+'}}';
+		let jsonData = JSON.stringify(json_string);				
 
 		var xhr = new XMLHttpRequest();
 		xhr.open("POST", 'https://app.cencilio.com/api/1.1/wf/save_file');
@@ -215,12 +130,7 @@ function send_data_processed() {
 	}
 	catch (error) {
 		console.info(error);
-		console.info('RESPONSE IS DAMAGED');
-		//column is not transversal because it has damaged response
-		console.info('Info obtenida', this.total_cols);
-		//independent damage occurs for all data in pages
-		console.info('Respuesta', this.total_rows);
-		alert('No ha seleccionado filas para guardar sus datos.');
+		alert('Imposible procesar los datos, contactar a soporte.');
 		return null;
 	}
 }
