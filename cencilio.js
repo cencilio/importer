@@ -8,9 +8,9 @@ class DOMNodeFactors {
 	this.unique = false; 
     this.re = false;
 	this.error = '';
+	this.logic = [];
   }
 }
-
 class ElReqs {
   constructor() {
 	this.label = "";
@@ -19,6 +19,7 @@ class ElReqs {
     this.unique = false;
     this.error = false;
     this.regex = false;
+	this.conditional = false;
   }
 }
 
@@ -72,8 +73,8 @@ function send_data_processed() {
 
 		}
 
-		let json_string = '{"userId":"'+ renderer.config['userId']+ '","sheet'+ this.editing + '":{"rows":'+JSON.stringify(data_rows)+'}}';
-		let jsonData = JSON.stringify(json_string);				
+		let JSON_OBJ = '{"userId":"'+renderer.config['userId']+'","sheet'+this.editing +'":{"rows":'+JSON.stringify(data_rows)+'}}';
+		let jsonString = JSON.stringify(JSON_OBJ);				
 
 		var xhr = new XMLHttpRequest();
 		xhr.open("POST", 'https://app.cencilio.com/api/1.1/wf/save_file');
@@ -89,7 +90,7 @@ function send_data_processed() {
 							"account":"${renderer.config['apiKey']}",
 							"filename":"${filename}",
 							"user_id":"${renderer.config['userId']}",
-							"response":${jsonData},
+							"response":${jsonString},
 							"key_file": {
 								"filename":"${filename}",
 								"contents":"${reader.result.split(',')[1]}"
@@ -102,16 +103,13 @@ function send_data_processed() {
 
 		xhr.onreadystatechange = function () {
 			if (xhr.readyState === 4 && xhr.status === 200) {
-				callback_data_processed(jsonData);
-				document.getElementById('sheet_div').remove();
-				document.getElementById('loading_data_cencilio').style.display = 'none';
-				document.getElementById('data_exported').style.display = 'block';
+				callback_data_processed(JSON_OBJ);
 				return true;
 			} else if (xhr.readyState === 1 || xhr.readyState === 2 || xhr.readyState === 3) {
 				console.log('Se estan procesando los datos, espera unos segundos');
 			} else {
 				console.log(xhr.responseText);
-				console.log('Hay un error al momento de procesar los datos');
+				console.log('Hay un error al momento de procesar los dato por Cencilio');
 				return null;
 			}
 		};
@@ -130,7 +128,7 @@ function send_data_processed() {
 	}
 	catch (error) {
 		console.info(error);
-		alert('Imposible procesar los datos, contactar a soporte.');
+		alert('Imposible procesar los datos, contactar a soporte de Cencilio');
 		return null;
 	}
 }
@@ -183,28 +181,73 @@ function callback_data_processed(data){
 	var xhr = new XMLHttpRequest();
 	xhr.open(renderer.config['callback']['callback_method'], renderer.config['callback']['callback_url']);
 	xhr.setRequestHeader("Accept", "application/json");
-	xhr.setRequestHeader("Authorization", renderer.config['userId']);
+	xhr.setRequestHeader(renderer.config['callback']['callback_token_key'], renderer.config['callback']['callback_token_value']);
 	xhr.setRequestHeader("Content-Type", "application/json");
 	xhr.send(data);
 
 	xhr.onreadystatechange = function () {
-		if (xhr.readyState === 4 && xhr.status === 200) {
+		if (xhr.readyState === 4 && xhr.status === 200) { //Here validate if the response include the error's flag
 			console.log('Data enviada');
+			document.getElementById('sheet_div').remove();
+			document.getElementById('loading_data_cencilio').style.display = 'none';
+			document.getElementById('data_exported').style.display = 'block';
 			return true;
 		} else if (xhr.readyState === 1 || xhr.readyState === 2 || xhr.readyState === 3) {
 			console.log('Se estan procesando los datos, espera unos segundos');
 		} else {
-			console.log(xhr.responseText);
-			console.log('Hay un error al momento de procesar los datos');
+			console.log(xhr.response);
+			document.getElementById('sheet_div').remove();
+			document.getElementById('loading_data_cencilio').style.display = 'none';
+			document.getElementById("modals_subtitle_cencilio_text").innerHTML = 'Error 404: No se pudo cargar los datos correctamente, por favor contacta al equipo de soporte.';
+			document.getElementById('export_warning_cencilio').style.display = 'block';
 			return null;
 		}
 	};
 }
-
 function errorCell(idx) {
 	/*Función que coloriza en rojo una celda
 	con placeholder de required inválido*/
 	idx.style.backgroundColor = renderer.config['theme']['global']['errorColor'];
+}
+
+
+function conditionalValidation(logic, value, logic_value) {
+	/* logic: la logica a aplicar
+	value: el valor de la celda a validar
+	logic_value: el valor para la logica a aplicar
+	 */
+	let clean_value = (!isNaN(value) && value !== "") ? parseFloat(value): value;
+	let clean_logic_value = (!isNaN(logic_value) && logic_value !== "") ? parseFloat(logic_value): logic_value;
+
+	switch (logic) { //validando tipo de logica a aplicar
+		case "===": //Debe ser
+			return clean_value === clean_logic_value;
+			
+		case "!==": //Debe NO ser
+			return clean_value !== clean_logic_value;
+			
+		case ">": //Debe ser mayor a
+			return clean_value > clean_logic_value;
+			
+		case "<": //Debe ser menor a
+			return value < clean_logic_value;
+			
+		case ">=": //Debe ser mayor o igual a
+			return clean_value >= clean_logic_value;
+			
+		case "<=": //Debe ser menor o igual a
+			return clean_value <= clean_logic_value;
+			
+		case "startsWith": //Debe iniciar con
+			return clean_value.startsWith(clean_logic_value);
+			
+		case "endsWith": //Debe finalizar con
+			return clean_value.endsWith(clean_logic_value);
+			
+		default:
+			return false;
+			
+	}
 }
 
 var _Utils = function ()
@@ -213,7 +256,6 @@ var _Utils = function ()
     {
         var retElement = null;
         var lstChildren = isSearchInnerDescendant ? Utils.getAllDescendant(element) : element.childNodes;
-
         for (var i = 0; i < lstChildren.length; i++)
         {
             if (lstChildren[i].id == childID)
@@ -222,16 +264,12 @@ var _Utils = function ()
                 break;
             }
         }
-
         return retElement;
     }
-
     this.getAllDescendant = function (element, lstChildrenNodes)
     {
         lstChildrenNodes = lstChildrenNodes ? lstChildrenNodes : [];
-
         var lstChildren = element.childNodes;
-
         for (var i = 0; i < lstChildren.length; i++) 
         {
             if (lstChildren[i].nodeType == 1) // 1 is 'ELEMENT_NODE'
@@ -240,12 +278,10 @@ var _Utils = function ()
                 lstChildrenNodes = Utils.getAllDescendant(lstChildren[i], lstChildrenNodes);
             }
         }
-
         return lstChildrenNodes;
     }        
 }
 var Utils = new _Utils;
-
 //AS THREAD
 function table_maker(Options, workbook){
 	//Usando los campos del objeto en JSON
@@ -590,6 +626,10 @@ function table_maker(Options, workbook){
 						validators.regex = true;
 						renderer.ndata.re = fields[j]['validators'][set].regex;
 					}
+					if (fields[j]['validators'][set]['validate'] === 'conditional') {
+						validators.conditional = true;
+						renderer.ndata.logic.push(...fields[j]['validators'][set].logics);
+					}
 					if (typeof fields[j]['validators'][set]['error'] !== 'undefined') {
 						validators.error = true;
 						renderer.ndata.error = fields[j]['validators'][set]['error'];
@@ -615,6 +655,7 @@ function table_maker(Options, workbook){
 			let validators = null;
 		}
 	}
+	console.log(renderer.dom_factor);
 
 
 	for (var sh = 0; sh < workbook.SheetNames.length; sh++) {
@@ -674,7 +715,6 @@ function table_maker(Options, workbook){
 		let tdLabelSelector = document.createElement('select');
 		tdLabelSelector.id = 'select_all_selector_' + String(vtypei);
 		tdLabelSelector.choices = [];
-		tdLabelShiftDiv.appendChild(tdLabelSelector);
 		
 		tdLabelSelector.onchange = function (e) {
 			try {
@@ -746,25 +786,33 @@ function table_maker(Options, workbook){
 					tdLabelSelector.appendChild(selectOption);
 
 				} else {
-					selectOption.value = renderer.dom_factor[vtypec][renderer.dom_factor[vtypec].length - 1].key;
-					tdLabelSelector.choices.push(renderer.dom_factor[vtypec][renderer.dom_factor[vtypec].length - 1].key);
-					selectOption.innerHTML = renderer.dom_factor[vtypec][renderer.dom_factor[vtypec].length - 1].label;
-/* 					if (vtypei === vtypec) {
-						tdLabelSelector.prev = renderer.dom_factor[vtypec][renderer.dom_factor[vtypec].length - 1].key;
-					} */
-					selectOption.trying = [];
-					for (let index = 0; index < renderer.dom_factor[vtypec].length - 1; index++) {
-						if (renderer.dom_factor[vtypec][index].critical !== false) {
-							selectOption.trying.push(['critical', renderer.dom_factor[vtypec][index].error]);
-						} else if (renderer.dom_factor[vtypec][index].unique !== false) {
-							selectOption.trying.push(['unique', renderer.dom_factor[vtypec][index].error]);
-						} else if (renderer.dom_factor[vtypec][index].re !== false) {
-							selectOption.trying.push(['re', renderer.dom_factor[vtypec][index].error]);
-							selectOption.re = renderer.dom_factor[vtypec][index].re;
-						}
+					if (vtypec < renderer.dom_factor.length) {
+						selectOption.value = renderer.dom_factor[vtypec][renderer.dom_factor[vtypec].length - 1].key;
+						tdLabelSelector.choices.push(renderer.dom_factor[vtypec][renderer.dom_factor[vtypec].length - 1].key);
+						selectOption.innerHTML = renderer.dom_factor[vtypec][renderer.dom_factor[vtypec].length - 1].label;
+						/* 					if (vtypei === vtypec) {
+												tdLabelSelector.prev = renderer.dom_factor[vtypec][renderer.dom_factor[vtypec].length - 1].key;
+											} */
+						selectOption.trying = [];
+						for (let index = 0; index < renderer.dom_factor[vtypec].length - 1; index++) {
+							if (renderer.dom_factor[vtypec][index].critical !== false) {
+								selectOption.trying.push(['critical', renderer.dom_factor[vtypec][index].error]);
+							} else if (renderer.dom_factor[vtypec][index].unique !== false) {
+								selectOption.trying.push(['unique', renderer.dom_factor[vtypec][index].error]);
+							} else if (renderer.dom_factor[vtypec][index].re !== false) {
+								selectOption.trying.push(['re', renderer.dom_factor[vtypec][index].error]);
+								selectOption.re = renderer.dom_factor[vtypec][index].re;
+							} else if (renderer.dom_factor[vtypec][index].logic.length !== 0) {
+								selectOption.trying.push(['conditional', renderer.dom_factor[vtypec][index].error]);
+								selectOption.logic = renderer.dom_factor[vtypec][index].logic;
+							}
 
-					}			
-					tdLabelSelector.appendChild(selectOption);
+						}
+						tdLabelSelector.appendChild(selectOption);
+					} else {
+						continue;
+					}
+	
 				}
 			}
 			catch (error) {
@@ -792,7 +840,6 @@ function table_maker(Options, workbook){
 	return renderer.split_resp;
 
 }
-
 function renderFun(file, config){
 	/*Función que toma la configuración del módulo como argumento
 	y el nombre de archivo cargado mediante drag and drop para renderizar el documento.
@@ -804,7 +851,6 @@ function renderFun(file, config){
 	  	var reader = new FileReader();
 	  	let next_col = false;
 	  	reader.onloadend = function(e) {
-
 	  		var data = e.target.result;
 	  		data = new Uint8Array(data);
 	  		//process_wb(XLSX.read(data, {type: 'array'}));
@@ -833,14 +879,12 @@ function renderFun(file, config){
 			   var percentLoaded = Math.round((e.loaded / e.total) * 100);
 			   	document.getElementById('draggerInputsContainer').style.display = 'none';
 				document.getElementById('spinner').style.display = 'block';
-
 			}
     	};
     	reader.onabort = function (e) {
       	e.abort();
     	};    		
     	reader.onloadstart = function (e) {
- 
     	};    	  	
 	  	reader.readAsArrayBuffer(file);
 	}
@@ -848,7 +892,6 @@ function renderFun(file, config){
 		console.info(error);
 	}
 }
-
 export default class renderWidget {
   constructor(file,config) {
 		this.config = config;	
@@ -897,6 +940,10 @@ export default class renderWidget {
 					if(e.Regex !== undefined){
 						nObj['validators'].push({"validate":'regex_match','regex':e.Regex, "error":e.ErrorMsg[2]});
 					}
+					if(e.Conditional){
+						nObj['validators'].push({"validate":'conditional','logics':e.Logics, "error":e.ErrorMsg[3]});
+					}
+					
 					
 					return nObj;
 				})
@@ -904,15 +951,16 @@ export default class renderWidget {
 				config['callback'] = {
 					callback_url: json_resp.response.callback_url,
 					callback_method: json_resp.response.callback_method,
-					redirect_url: json_resp.response.redirect_url
+					redirect_url: json_resp.response.redirect_url,
+					callback_token_key: json_resp.response.token_key,
+					callback_token_value: json_resp.response.token_value
 				};
-
+				console.log(config);
 				dragger.style.backgroundColor = config['theme']['global']['backgroundColor'];
 				dragger.style.color = config['theme']['global']['textColor']; 
 				draggerForm.style = 'position: relative; width: 100%;height: 100%; text-align: center; outline-offset: -10px; outline: 2px dashed'+config['theme']['global']['primaryButtonColor']+';';
 				draggerImg2.setAttribute('stroke', config['theme']['global']['primaryButtonColor']);
 				draggerInputsContainer.style.display = 'block';
-
 
 			} else if(xhr.status === 400 || xhr.status === 401 ){
 				dragger.style.backgroundColor = '#F3F9FF';
@@ -924,7 +972,6 @@ export default class renderWidget {
 
 
 		}
-
 		//Agregamos los scripts externos al body para renderizar el contenido del excel
 		const script_xlsx = document.createElement("script");
 		script_xlsx.src = "https://oss.sheetjs.com/sheetjs/xlsx.full.min.js";
@@ -932,10 +979,8 @@ export default class renderWidget {
 		const script_shim = document.createElement("script");
 		script_shim.src = "https://oss.sheetjs.com/sheetjs/shim.js";
 		script_shim.async = true;
-	
 		document.body.appendChild(script_xlsx);
 		document.body.appendChild(script_shim);
-
 		let tableStyle = document.createElement('style');
 		tableStyle.innerHTML = `
 		#sheet_div{
@@ -956,41 +1001,33 @@ export default class renderWidget {
 			box-shadow: 0px 4px 88px rgba(0, 0, 0);
 			display:block;
 		  }
-	  
 		  #header_xlsx{
 			padding: 10px 0;
 			height: 25%;
 		  }
-	  
 		  .cencilio_row{
 			display: flex;
 		  }
-	  
 		  .cencilio-col{
 			width: 50%; 
 			position:relative;
 		  }
-
 		  .cencilio-col-30{
 			width: 30%; 
 			position:relative;
 		  }
-
 		  .cencilio-col-70{
 			width: 70%; 
 			position:relative;
 		  }
-	  
 		  #close_sheet, #filter_rows_btn{
 			background-color: transparent;
 			border: 0px;
 			float: right;
 		  }
-
 		  #rows_counter_container{
 			  display: inline;
 		  }
-
 		  #filters_rows_container{
 			background: #FFFFFF;
 			border: 1px solid #CFD8E5;
@@ -1008,16 +1045,13 @@ export default class renderWidget {
 			position: relative;
 			z-index: 1000;
 		  }
-
 		  #filter_rows_btn{
 			  color: rgb(7, 40, 140);
 			  margin-left: 25px;
 		  }
-	  
 		  #cencilio_file_name, #select_sheet_label{
 			font-size: 16px;
 		  }
-	  
 		  #sheet_select{
 			width: 136px; 
 			border-radius: 6px;
@@ -1027,7 +1061,6 @@ export default class renderWidget {
 			border: 1px solid #CFD8E5;
 			color: #0A1833;
 		  }
-	  
 		  #cargar_btn_cencilio{
 			height: 36px; 
 			width: 122px; 
@@ -1038,10 +1071,8 @@ export default class renderWidget {
 			color: #FFFFFF; 
 			float: right;
 		  }
-	  
 		  #cencilio_title_instructions{
 			font-weight: 700;
-	  
 		  }
 		  #cencilio_instructions{
 			font-weight: 400;
@@ -1050,38 +1081,30 @@ export default class renderWidget {
 			font-size: 14px; 
 			margin-right: 10px;
 		  }
-	  
 		  #page_table_container{
 			height: 65%; 		
 		  }
-
 		  #page_table_row{
 			height: 8%; 		
 		  }
-
 		  #page_table{
 			overflow-x: scroll; 
 			height: 92%; 
 			overflow-y: scroll;
 			width: 100%;
-			
 		  }
-	  
 		  #page_table table{
 			border-collapse:separate;
 			border-spacing: 0; 
 		  }
-	  
 		  #sheetFieldSelector{
 			height: 46px;
-			
 		  }
 		  #sheetFieldSelector th{
 			background: rgba(207, 216, 229, 0.7); 
 			padding: 10px 12px;
 			border: 0.5px solid #CFD8E5;
 		  }
-	  
 		  #sheetFieldSelector select{
 			border: 1px solid #CFD8E5;
 			border-radius: 6px;
@@ -1093,40 +1116,30 @@ export default class renderWidget {
 			border-top-left-radius: 6px;
 			border-collapse:separate
 		  }
-	  
 		  #sheetFieldSelector th:last-child{
 			border-top-right-radius: 6px;
 			border-collapse:separate
 		  }
-	  
 		  #sheet_rows tr:nth-child(even){
 			background-color: rgba(54, 105, 177, 0.05);;
 		  }
-	  
 		  #sheet_rows tr:nth-child(even) input[type="text"]{
 			background-color: rgba(54, 105, 177, 0.03);;
 		  }
-	  
 		  #sheet_rows tr td{
 			border: 0.5px solid #CFD8E5;
-			
 		  }
-	  
 		  #sheet_rows input[type="text"]{
 		  border: transparent;
 		  height: 34px;
 		  }
-	  
 		  #sheet_rows input:focus{
 			outline:solid 1px #2A438C;
 		  }
-	  
 		  #sheet_rows tr td:first-child{
 			padding: 0px 30px 0px 14px;
 			position: relative;
-	  
 		  }
-	  
 		  #sheet_rows tr td:first-child label{
 			position: absolute;
 			margin-left: 5px;
@@ -1196,7 +1209,6 @@ export default class renderWidget {
 			border-radius: 20px;
 			margin-top: 15px;
 		}
-
 		  #loadng_progress_bar_cencilio{
 			height: 100%;
 			width: 5%;
@@ -1238,10 +1250,7 @@ export default class renderWidget {
 		}
 
 		`;
-		
 		document.head.appendChild(tableStyle);
-
-
 		let invalidKey = document.createElement('div');
 		invalidKey.id = 'api_error';
 		invalidKey.style = 'position: relative; top: 50%; transform: translateY(-50%); display: none;';
@@ -1263,6 +1272,8 @@ export default class renderWidget {
 			ev.preventDefault();
   			if (ev.dataTransfer.items) {
     			var file = ev.dataTransfer.items[0].getAsFile();
+    			console.info('GETTING IT AS FILE', file);
+    			renderer.file = file;
     			try{
 					renderer.file_name = file.name;
 					renderFun(file,config);  
@@ -1271,16 +1282,14 @@ export default class renderWidget {
 				}
   			} else {
     			var file = ev.dataTransfer.files[0];
+    			console.info('TRANSFERRING DATA');
 				renderFun(file,config);    	
   			}				
 		};
-
-
 		let draggerForm = document.createElement('form');	
 		draggerForm.className = 'pimg';
 		draggerForm.id = 'pimg';
 		draggerForm.enctype = 'multipart/form-data';
-
 		let draggerInputsContainer = document.createElement('div');
 		draggerInputsContainer.id= 'draggerInputsContainer';
 		draggerInputsContainer.style = 'position: relative; top: 50%; transform: translateY(-50%);display:none;';
@@ -1309,10 +1318,8 @@ export default class renderWidget {
 			'stroke-width',
 			'1.8'
 			);	
-		  
 		draggerImg2.appendChild(iconPath);
 		draggerInputsContainer.appendChild(draggerImg2);
-
 		let draggerInput = document.createElement('input');	
 		draggerInput.type = 'file';
 		draggerInput.id = 'pIn';
@@ -1324,7 +1331,6 @@ export default class renderWidget {
 			renderer.file_name = this.files[0].name;
 			renderFun(this.files[0], config);
 		};
-
 		let draggerLabel = document.createElement('label');	
 		draggerLabel.appendChild(document.createTextNode("Arrastra tu archivo aquí o haz click para cargar"));
 		draggerLabel.htmlFor='pIn';
@@ -1332,27 +1338,22 @@ export default class renderWidget {
 		draggerLabel.id='importer-msg';
 		draggerLabel.style = 'margin-top: 10px; cursor: pointer; font-weight:500;';
 		draggerInputsContainer.appendChild(draggerLabel);	
-
 		let draggerSubLabel = document.createElement('p');
 		draggerSubLabel.innerHTML = 'Formatos permitidos CSV, XLSX, XLS' ;
 		draggerSubLabel.style = 'font-size: 12px; font-weight:300;';
 		draggerInputsContainer.appendChild(draggerSubLabel);
-
 		let excelButton = document.createElement('button'); 			
 		excelButton.id = 'ppbutton'; 		
 		excelButton.style = 'display:none;'; 
-
 		let draggerSpinner = document.createElement('div');
 		draggerSpinner.appendChild(document.createTextNode("Cargando..."));
 		draggerSpinner.id = 'spinner';	
 		draggerSpinner.style = 'position: relative; top: 50%; transform: translateY(-50%); display: none;';
-		
 		draggerInputsContainer.appendChild(excelButton);
 		draggerForm.appendChild(draggerSpinner);
 		draggerForm.appendChild(draggerInputsContainer);	
 		draggerForm.appendChild(invalidKey);
 		dragger.appendChild(draggerForm);
-
 		let exportConfirmationDiv = document.createElement('div');
 		exportConfirmationDiv.id = 'export_confirmation_cencilio';
 		exportConfirmationDiv.className = 'modals_cencilio_style';
@@ -1360,15 +1361,12 @@ export default class renderWidget {
 		let exportConfirmationTitle = document.createElement('p');
 		exportConfirmationTitle.className = 'modals_title_cencilio_style';
 		exportConfirmationTitle.innerHTML = '¿Estás seguro de cargar tus datos?';
-
 		let exportConfirmationSubtitle = document.createElement('p');
 		exportConfirmationSubtitle.className = 'modals_subtitle_cencilio_style';
 		exportConfirmationSubtitle.innerHTML = 'Una vez cargados tus datos no podrán ser editados.';
-
 		let exportConfirmationBtnsDiv = document.createElement('div');
 		exportConfirmationBtnsDiv.id = 'export_confirmation_btns_div';
 		exportConfirmationBtnsDiv.style = 'display: flex;';
-
 		let cancelExportBtn = document.createElement('button');
 		cancelExportBtn.id = 'cancel_export_btn';
 		cancelExportBtn.className = 'modal_btns';
@@ -1378,7 +1376,6 @@ export default class renderWidget {
 		document.getElementById('export_confirmation_cencilio').style.display = 'none';
 		renderer.set_virtual = true;	
 		}
-
 		let confirmExportBtn = document.createElement('button');
 		confirmExportBtn.id = 'confirm_export_btn';
 		confirmExportBtn.className = 'modal_btns';
@@ -1431,22 +1428,18 @@ export default class renderWidget {
 		let loadingDataTitle = document.createElement('p');
 		loadingDataTitle.className = 'modals_title_cencilio_style';
 		loadingDataTitle.innerHTML = 'Cargando datos...';
-
 		let loadingDataSubtitle = document.createElement('p');
 		loadingDataSubtitle.style = 'font-size: 14px; display:block; font-weight: 300; color: #07288C';
 		loadingDataSubtitle.id = 'loading_subtitle_cencilio';
-
 		let progressBarWrapper = document.createElement('div');
 		progressBarWrapper.id = 'progress_bar_wrp';
 		let loadingProgressBar = document.createElement('div');
 		loadingProgressBar.id = 'loadng_progress_bar_cencilio';
-
 		loadingDataDiv.appendChild(loadingDataTitle);
 		loadingDataDiv.appendChild(loadingDataSubtitle);
 		loadingDataDiv.appendChild(progressBarWrapper);
 		progressBarWrapper.appendChild(loadingProgressBar);
 		document.body.appendChild(loadingDataDiv);
-
 		let dataExportDiv = document.createElement('div');
 		dataExportDiv.id = 'data_exported';
 		dataExportDiv.className = 'modals_cencilio_style';
@@ -1467,7 +1460,6 @@ export default class renderWidget {
 		document.body.appendChild(dataExportDiv);				
 			
   }
-
 	tdCombined(event) {
 		//solve passive trigger on active element
 		if (event.target){
@@ -1509,10 +1501,10 @@ export default class renderWidget {
 					//given regexp cannot be accessed from the index
 					if (renderer.dom_factor[b - 1][dom_length-1].re !== false) {
 								// actualizar trying de los td en la columna con base a select seleccionado - aplicar/usar row_vals.childNodes[a].childNodes[0]
-						this.ground_truth = renderer.prove(row_vals.childNodes[a].childNodes[0], a - 1, row, Page, row_vals.childNodes[a].childNodes[0].value,process.trying, renderer.dom_factor[b - 1][0].error, false, true, process.re); //wants to exchange processes with a different regexp			
+						this.ground_truth = renderer.prove(row_vals.childNodes[a].childNodes[0], a - 1, row, Page, row_vals.childNodes[a].childNodes[0].value,process.trying, renderer.dom_factor[b - 1][0].error, false, true, process.re,process.logic); //wants to exchange processes with a different regexp			
 					}
 					else {
-						this.ground_truth = renderer.prove(row_vals.childNodes[a].childNodes[0], a - 1, row, Page, row_vals.childNodes[a].childNodes[0].value, process.trying, renderer.dom_factor[b - 1][0].error, false, false, process.re); //wants to exchange processeS row_vals.childNodes[a].childNodes[0]
+						this.ground_truth = renderer.prove(row_vals.childNodes[a].childNodes[0], a - 1, row, Page, row_vals.childNodes[a].childNodes[0].value, process.trying, renderer.dom_factor[b - 1][0].error, false, false, process.re,process.logic); //wants to exchange processeS row_vals.childNodes[a].childNodes[0]
 					}
 					//FINDS A TRAVERSED NODE
 					if (row_vals.childNodes[a].childNodes[0].isinvalid === true) {
@@ -1562,7 +1554,6 @@ export default class renderWidget {
 			}
 		}
 	}	
-
 	render_invalid_page(state) {
   		let rows = document.getElementById('sheet_rows').childNodes;
   		this.skip_bad_row = false;
@@ -1589,75 +1580,46 @@ export default class renderWidget {
 			}
 		}			
 	}	
-
 	render_invalid(state,row) {
 		if (state === true){
-			let children = row.childNodes;
-  			for (var j = 0; j < children.length; j++) {
-  				let grandchildren = children[j].childNodes;
-  				for (var k = 0; k < grandchildren.length; k++) {
-  					if (grandchildren[k].type === 'checkbox'){
+			for (var r = 0; r < document.getElementById('sheet_rows').childNodes.length; r++) {
+				let grandchildren = document.getElementById('sheet_rows').childNodes[r];
+  				for (var k = 0; k < grandchildren.childNodes.length; k++) {
+					//console.info('ITERATING CELL',grandchildren.childNodes[k].childNodes[0]);  
+  					if (grandchildren.childNodes[k].childNodes[0].type === 'checkbox'){
 						continue;  					
   					}
-  					else if (grandchildren[k].type !== 'text'){
+  					else if (grandchildren.childNodes[k].childNodes[0].type !== 'text'){
 						continue;  					
-  					}
-					if (grandchildren[k].isinvalid === true){
-						if (grandchildren[k].style.backgroundColor === 'black'){
-							grandchildren[k].style.backgroundColor = this.errorColor;
-							grandchildren[k].parentElement.childNodes[1].style.backgroundColor = 'black';
-						}
-						else if (grandchildren[k].style.color === 'black'){
-							grandchildren[k].style.color = document.getElementById('sheet_div').style.color;
-							grandchildren[k].parentElement.childNodes[1].style.backgroundColor = 'black';
-						}
+  					}					
+  					//intensify error
+					if (grandchildren.childNodes[k].childNodes[0].isinvalid === true){
+						grandchildren.childNodes[k].childNodes[0].style.backgroundColor = 'rgb(201 41 41 / 92%)';
+       				if (typeof grandchildren.childNodes[k].childNodes[1] === 'undefined'){
+							//El mensaje es dado en un evento o manejado por el elemento que contiene la verificacion		
+							//console.info('ERROR', renderer.dom_factor[k-1][0][0].error, 'AT COLUMN',k);
+							this.addTooltip(grandchildren.childNodes[k], renderer.dom_factor[k-1][0][0].error);	 	  					
+   	 				}
 					}  
-					else{
-						if (document.getElementById('show_changed').checked === true){
-							if (grandchildren[k].isedited === true){
-								continue;							
-							}
-						}	
-						grandchildren[k].style.backgroundColor = 'black';	
-						if (document.getElementById('sheet_div').style.color !== 'black'){
-							grandchildren[k].style.color = 'black';
-						}
-						else{
-							grandchildren[k].style.color = document.getElementById('sheet_div').style.color;						
-							grandchildren[k].parentElement.childNodes[1].style.backgroundColor = 'black';
-						}
-					}
 				}
-			}			
+			}				
 		}
 		else{
-			let children = row.childNodes;
-  			for (var j = 0; j < children.length; j++) {
-  				let grandchildren = children[j].childNodes;
-  				for (var k = 0; k < grandchildren.length; k++) {		
-					if (grandchildren[k].style.backgroundColor === 'black'){
-						grandchildren[k].style.backgroundColor = 'white';
-						grandchildren[k].style.color = document.getElementById('sheet_div').style.color;						
-						//color exceptions to display error 
-						try{
-							grandchildren[k].parentElement.childNodes[1].style.backgroundColor = 'black'; 
-							grandchildren[k].parentElement.childNodes[1].style.color = 'yellow'; 
-						}
-						catch (error) {
-						}  	
-					}
-					else if (grandchildren[k].style.color === 'black'){
-						grandchildren[k].style.color = document.getElementById('sheet_div').style.color;
-					} 					
+			for (var r = 0; r < document.getElementById('sheet_rows').childNodes.length; r++) {
+				let grandchildren = document.getElementById('sheet_rows').childNodes[r];
+  				for (var k = 0; k < grandchildren.childNodes.length; k++) {
+  					//milden error	
+  					console.info(grandchildren.childNodes[k].childNodes[0]);
+					if (grandchildren.childNodes[k].childNodes[0].isinvalid === true){
+						grandchildren.childNodes[k].childNodes[0].style.backgroundColor = this.errorColor;
+					}  				
 				}
 			}				
 		}
 	}		
-
 	allNull(cell) {
   		return cell === null;
 	}	
-
 	render_edited_page(state) {
   		let rows = document.getElementById('sheet_rows').childNodes;
   		this.skip_bad_row = false;
@@ -1684,35 +1646,16 @@ export default class renderWidget {
 			}
 		}					
 	}	
-	
 	render_edited(state,row) {	
 		if (state === true){
 			let children = row.childNodes;
   			for (var j = 0; j < children.length; j++) {
   				let grandchildren = children[j].childNodes;
   				for (var k = 0; k < grandchildren.length; k++) {
-  					if (grandchildren[k].type === 'checkbox'){
-						continue;  					
-  					}
-  					else if (grandchildren[k].type !== 'text'){
-						continue;  					
-  					}
 					if (grandchildren[k].isnewinfo === true){
-						if (grandchildren[k].style.backgroundColor === 'black'){
-							grandchildren[k].style.backgroundColor = 'white';
-						}
-						else if (grandchildren[k].style.color === 'black'){
-							grandchildren[k].style.color = document.getElementById('sheet_div').style.color;
-						}
-					}  
-					else{
-						if (document.getElementById('show_errors').checked === true){
-							if (grandchildren[k].isinvalid === true){
-								continue;							
-							}
-						}	
-						grandchildren[k].style.backgroundColor = 'black';	
-						grandchildren[k].style.color = 'black';
+						console.info(grandchildren[k].style.backgroundColor);
+						grandchildren[k].style.backgroundColor = 'rgb(0 0 0 / 26%)';	
+						console.info(grandchildren[k].style.backgroundColor);
 					}  
 				}
 			}			
@@ -1722,7 +1665,8 @@ export default class renderWidget {
   			for (var j = 0; j < children.length; j++) {
   				let grandchildren = children[j].childNodes;
   				for (var l = 0; l < grandchildren.length; l++){
-					if (grandchildren[l].style.backgroundColor === 'black'){
+					console.info('ITERATING EDITED CELL');
+					if (grandchildren[l].isnewinfo === true){
 						grandchildren[l].style.backgroundColor = 'white';
 						if (grandchildren[l].isinvalid !== true){
 							grandchildren[l].style.backgroundColor = 'white';
@@ -1731,15 +1675,10 @@ export default class renderWidget {
 							grandchildren[l].style.backgroundColor = renderer.config['theme']['global']['errorColor'];
 						}
 					}
-					else if (grandchildren[l].style.color === 'black'){
-						grandchildren[l].style.color = document.getElementById('sheet_div').style.color;
-					}
-					grandchildren[l].style.color = document.getElementById('sheet_div').style.color;
 				} 					
 			}				
 		}
 	}
-
 	addTooltip(k, msg){
 		/*  
 			Una funcion que crea un tooltip con un mensaje y lo anexa con su pariente contenedor 	
@@ -1774,7 +1713,6 @@ export default class renderWidget {
 			/* Normalmente utilizamos hover de CSS para estilizar elementos en los que esta el cursor pero en este caso necesitamos usar onmouseenter */
 			//Buscamos la celda que guarda propiedades para controlar la vista del mensaje
 			//Un elemento que guarda informacion falsa guarda un estado positivo de falsabilidad
-
 			//Si el dato se falsifica su valor no es valido
 			//Usamos la propiedad de visibilidad para saber si el elemento con la informacion falsa expone su error
 			if (e.target.childNodes[0].falsable === true){
@@ -1785,16 +1723,12 @@ export default class renderWidget {
 				e.target.childNodes[1].style.visibility =  'hidden';
 			}
 	   };
-
 	   k.onmouseleave = function(e){
 			//Si el error esta expuesto necesitamos controlar la visibilidad temporalmente para seguir cambiando los datos
 			e.target.childNodes[1].style.visibility =  'hidden';
 		};
-
-
 		return k;
 	}
-
 	//Renderizados de tabla (celdas)
 	loadTable(idx) {
 		let ipage = renderer.excel_data[idx];
@@ -1900,9 +1834,9 @@ export default class renderWidget {
 							let select_target = document.getElementById('select_all_selector_'+e.target.col);
 							let value_index = select_target.choices.indexOf(select_target.value);
 							if(value_index >= 0){ //validate if the field's map is done
-								renderer.prove(e.target, e.target.col, e.target.row, this.editing, e.target.value, select_target[value_index].trying, e.target.err_msg, false, false,select_target[value_index].re);
+								renderer.prove(e.target, e.target.col, e.target.row, this.editing, e.target.value, select_target[value_index].trying, e.target.err_msg, false, false,select_target[value_index].re,select_target[value_index].logic);
 							}else{
-								renderer.prove(e.target, e.target.col, e.target.row, this.editing, e.target.value, e.target.trying, e.target.err_msg, false, false,e.target.re);
+								renderer.prove(e.target, e.target.col, e.target.row, this.editing, e.target.value, e.target.trying, e.target.err_msg, false, false,e.target.re,e.target.logic);
 							}
 							e.target.isedited = false; // undestand why is falsed afte prove() function
 							renderer.excel_data[this.editing][e.target.row][e.target.col] = e.target.value;
@@ -1998,8 +1932,36 @@ export default class renderWidget {
 										renderer.falsable_cells[idx][R][C] = false;
 									}
 									trDiv.bad_row = true;
-								}
-								else {
+								} else if(renderer.dom_factor[C][val].logic.length !== 0){
+									this.textbox.readOnly = false;
+									this.textbox.trying.push(['conditional',renderer.dom_factor[C][val].error]);
+									this.textbox.logic = renderer.dom_factor[C][val].logic;
+									//Validar logic for input
+									let col_validate = renderer.dom_factor.findIndex (dm => dm.some(k => k.key === renderer.dom_factor[C][val].logic[0]));
+									let cell_a_value = ipage[R][col_validate];
+									let cond_a_result = conditionalValidation(renderer.dom_factor[C][val].logic[1],cell_a_value, renderer.dom_factor[C][val].logic[2]);
+									let cond_b_result = conditionalValidation(renderer.dom_factor[C][val].logic[3], v, renderer.dom_factor[C][val].logic[4]);
+									
+									if (cond_a_result) {
+										if (cond_a_result && cond_b_result) {
+											this.textbox.isinvalid = false;
+											renderer.falsable_cells[idx][R][C] = false;
+										} else {
+											errorCell(this.textbox); //coloriza campo con re   
+											errors_sum += 1;
+											this.textbox.err_msg.push(renderer.dom_factor[C][val].error);
+											this.textbox.isinvalid = true;
+											renderer.falsable_cells[idx][R][C] = true;
+											this.textbox.falsable = true;
+										}
+									} else {
+										this.textbox.isinvalid = false;
+										renderer.falsable_cells[idx][R][C] = false;
+									}
+
+
+
+								} else {
 									//LABEL SET WITHOUT VALIDATION
 									this.textbox.trying.push(null);
 									this.textbox.err_msg.push('');
@@ -2133,7 +2095,7 @@ export default class renderWidget {
 		return this.trs;
 	}
 
-	proveFilled(idx, C, R, Page, X, error, save, swap, newreq) {
+	proveFilled(idx, C, R, Page, X) {
 		//index => saving (save condition), change => update (real ground conditions applicate only if values are changed and focusing is discounted), structure => loop (swap condition)
 		if (X === null) { //value is handled
 			if (idx != false) {
@@ -2169,6 +2131,15 @@ export default class renderWidget {
 				idx.isedited = false;
 			}
 			renderer.falsable_cells[Page][R][C] = false;
+       	let count=0;
+       	for (var rw = 0; rw < renderer.falsable_cells[Page].length; rw++){
+       		for (var r = 0; r < renderer.falsable_cells[Page][rw].length; r++){ 
+       			if (renderer.falsable_cells[Page][rw][r] === true){
+						count += 1;       		
+       			}
+       		}	
+       	}
+			document.getElementById('error_sheets').innerHTML = 'Con errores: '+String(count);
 			return true;
 		}
 		else {
@@ -2184,7 +2155,6 @@ export default class renderWidget {
 			return false;
 		}
 	}
-
 	purify(idx,C,R,Page) {
 		/* A function that eliminates validator and trial of column in all pages */
 		renderer.falsable_cells[Page][R][C] = false;	 		
@@ -2196,7 +2166,7 @@ export default class renderWidget {
 		return true;
 	}
 
-	proveUnique(idx,C,R,Page,X, error, save, swap) {
+	proveUnique(idx,C,R,Page,X, save, swap) {
 		if (X === null){
 			this.x = idx.value;	
 			this.row = idx.row;	
@@ -2205,7 +2175,6 @@ export default class renderWidget {
 			this.x = X;	
 			this.row = R;			
 		}
-
 		this.isunique = true;
 		if (renderer.hasOwnProperty('vals_unique') === false){
 			renderer.vals_unique = [];
@@ -2341,7 +2310,69 @@ export default class renderWidget {
 		}
 	}
 
-	prove(idx,C,R,Page,X,process,error,save,swap, re) {
+
+	proveConditional(idx, C, R, Page, logic){
+		let cell_a_key = logic[0];
+		let cell_a_logic = logic[1];
+		let cell_a_logic_value = logic[2];
+		let cell_a_value = null;
+		let cell_b_value = idx.value;
+		let cell_b_logic = logic[3];
+		let cell_b_logic_value = logic[4];
+
+		for (var col = 0; col < renderer.excel_data[Page][R].length; col++) {
+			let field_selected = document.getElementById('select_all_selector_' + col);
+			if (field_selected.value === cell_a_key) {
+				cell_a_value = renderer.excel_data[Page][R][col];
+				break;
+			} 
+
+		}
+
+		let cond_a_result = conditionalValidation(cell_a_logic,cell_a_value, cell_a_logic_value);
+		let cond_b_result = conditionalValidation(cell_b_logic, cell_b_value, cell_b_logic_value);
+
+		if (cond_a_result) {
+			if (cond_a_result && cond_b_result) { 
+				if (idx !== false) {
+					idx.unique = 0;
+					idx.isinvalid = false;
+					idx.falsable = false;
+					idx.isedited = false;
+					idx.style.backgroundColor = null;
+				}
+				renderer.falsable_cells[Page][R][C] = false;
+				document.getElementById('error_sheets').innerHTML = 'Con errores: ' + String(parseInt(document.getElementById('error_sheets').innerHTML.split('Con errores: ')[1]) - 1);
+				return true;
+	
+			} else { 
+				if (idx !== false) {
+					idx.unique = 1;
+					idx.isinvalid = true;
+					idx.falsable = true;
+				}
+				renderer.falsable_cells[Page][R][C] = true;
+				document.getElementById('error_sheets').innerHTML = 'Con errores: ' + String(parseInt(document.getElementById('error_sheets').innerHTML.split('Con errores: ')[1]) + 1);
+				return false;
+			}
+		} else {
+			if (idx !== false) {
+				idx.unique = 0;
+				idx.isinvalid = false;
+				idx.falsable = false;
+				idx.isedited = false;
+				idx.style.backgroundColor = null;
+			}
+			renderer.falsable_cells[Page][R][C] = false;
+			document.getElementById('error_sheets').innerHTML = 'Con errores: ' + String(parseInt(document.getElementById('error_sheets').innerHTML.split('Con errores: ')[1]) - 1);
+			return true;
+		}
+
+	}
+
+
+	prove(idx,C,R,Page,X,process,error,save,swap,re,logic) {
+
 		/* function that returns a boolean for the outcome of true data testing 
 			args:
 				idx: renderer cell with process attributes
@@ -2354,6 +2385,7 @@ export default class renderWidget {
 				save (required boolean): change process conditions if values are saved
 				swap (required boolean): change process conditions if values are traversed
 				re (required string): regular expression is given since when the indexed is changed	
+				logic (required string): logic for conditional validation
 		*/
 		if (idx === false){
 			if (X === null){
@@ -2375,17 +2407,15 @@ export default class renderWidget {
 			}
 			if (this.process[j][0] === 'critical'){
 				this.outcome = this.proveFilled(this.proving,C,R,this.currentp, this.x, error, save, swap);
-				if (this.outcome === false){ //stop verification and raise the error
-					this.obj_err_msg.push(this.process[j][1]);
-					//return this.outcome;				
+				if (this.outcome === false){ 
+					this.obj_err_msg.push(this.process[j][1]);				
 				}
 				
 			}
 			else if (this.process[j][0] === 'unique'){
 				this.outcome = this.proveUnique(this.proving,C,R,this.currentp, this.x, error, save, swap);
 				if (this.outcome === false){
-					this.obj_err_msg.push(this.process[j][1]);
-					//return this.outcome;				
+					this.obj_err_msg.push(this.process[j][1]);				
 				}
 			}
 			else if (this.process[j][0] === 're'){
@@ -2396,11 +2426,14 @@ export default class renderWidget {
 					this.outcome = this.proveRe(this.proving,C,R,this.currentp, this.x, re); //factor is handled				
 				}
 				if (this.outcome === false){
-					this.obj_err_msg.push(this.process[j][1]);
-					//return this.outcome;				
+					this.obj_err_msg.push(this.process[j][1]);				
 				}
-			}
-			else if (this.process[j] === null){
+			} else if(this.process[j][0] === 'conditional'){
+				this.outcome = this.proveConditional(this.proving,C,R,this.currentp,logic);
+				if (this.outcome === false){ 
+					this.obj_err_msg.push(this.process[j][1]);				
+				}
+			} else if (this.process[j] === null){
 				this.outcome = true;			
 			}
 		}
@@ -2416,7 +2449,6 @@ export default class renderWidget {
 	}
 	//XLSX.writeFile(workbook, fname, write_opts) write file back
 }
-
 function uploadxls(){
 	document.getElementById('pIn').click();
 };
