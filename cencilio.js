@@ -9,6 +9,7 @@ class DOMNodeFactors {
     this.re = false;
 	this.error = '';
 	this.logic = [];
+	this.list = [];
   }
 }
 class ElReqs {
@@ -248,6 +249,31 @@ function conditionalValidation(logic, value, logic_value) {
 			return false;
 			
 	}
+}
+
+function addSelectList(element, parent, options,destination) {
+	let container_list = document.createElement('div');
+	let list = document.createElement('ul');
+	let ev = {};
+	ev.target = destination;
+	container_list.className = 'static-value-list';
+	container_list.style.width = element.offsetWidth + 'px';
+	container_list.style.top = (element.offsetTop+element.offsetHeight-parent.scrollTop) + 'px';
+	container_list.style.left = (element.offsetLeft-parent.scrollLeft) + 'px';
+	container_list.appendChild(list);
+	options.forEach(e => {
+		let options = document.createElement('li');
+		options.innerHTML = e;
+		options.onclick =  function (e){
+			destination.value = e.target.innerText;
+			destination.onblur(ev);
+			container_list.remove();
+		};
+		list.appendChild(options);
+	});
+	
+	parent.appendChild(container_list);
+	
 }
 
 var _Utils = function ()
@@ -625,6 +651,7 @@ function table_maker(Options, workbook){
 					if (fields[j]['validators'][set]['validate'] === 'regex_match') {
 						validators.regex = true;
 						renderer.ndata.re = fields[j]['validators'][set].regex;
+						renderer.ndata.list.push(...fields[j]['validators'][set].list);
 					}
 					if (fields[j]['validators'][set]['validate'] === 'conditional') {
 						validators.conditional = true;
@@ -655,8 +682,6 @@ function table_maker(Options, workbook){
 			let validators = null;
 		}
 	}
-	console.log(renderer.dom_factor);
-
 
 	for (var sh = 0; sh < workbook.SheetNames.length; sh++) {
 		try {
@@ -777,12 +802,12 @@ function table_maker(Options, workbook){
 					tdLabelSelector.appendChild(selectOption);
 
 				} else if (renderer.tableSize + 1 === vtypec) {
-					selectOption.value = "";
+					selectOption.value = "Campo " + (vtypei + 1);
 					tdLabelSelector.choices.push("Campo " + (vtypei + 1));
 					selectOption.innerHTML = "Campo " + (vtypei + 1);
 					selectOption.defaultSelected = true;
 					selectOption.disabled = true;
-					//tdLabelSelector.prev = this.abstract_key;							
+					selectOption.list_options = [];						
 					tdLabelSelector.appendChild(selectOption);
 
 				} else {
@@ -802,6 +827,7 @@ function table_maker(Options, workbook){
 							} else if (renderer.dom_factor[vtypec][index].re !== false) {
 								selectOption.trying.push(['re', renderer.dom_factor[vtypec][index].error]);
 								selectOption.re = renderer.dom_factor[vtypec][index].re;
+								selectOption.list_options = renderer.dom_factor[vtypec][index].list;
 							} else if (renderer.dom_factor[vtypec][index].logic.length !== 0) {
 								selectOption.trying.push(['conditional', renderer.dom_factor[vtypec][index].error]);
 								selectOption.logic = renderer.dom_factor[vtypec][index].logic;
@@ -927,7 +953,7 @@ export default class renderWidget {
 				};
 				config['fields'] = json_resp.response.schema.map(function (e) {
 					let nObj =  {};
-					
+					let options = (typeof e.List_options !== 'undefined') ? e.List_options : [];
 					nObj['label'] = e.Label;
 					nObj['key'] = e.Key;
 					nObj['validators'] = [];
@@ -938,7 +964,7 @@ export default class renderWidget {
 						nObj['validators'].push({"validate":'required', "error":e.ErrorMsg[0]});
 					}
 					if(e.Regex !== undefined){
-						nObj['validators'].push({"validate":'regex_match','regex':e.Regex, "error":e.ErrorMsg[2]});
+						nObj['validators'].push({"validate":'regex_match','regex':e.Regex,"list":options, "error":e.ErrorMsg[2]});
 					}
 					if(e.Conditional){
 						nObj['validators'].push({"validate":'conditional','logics':e.Logics, "error":e.ErrorMsg[3]});
@@ -955,7 +981,6 @@ export default class renderWidget {
 					callback_token_key: json_resp.response.token_key,
 					callback_token_value: json_resp.response.token_value
 				};
-				console.log(config);
 				dragger.style.backgroundColor = config['theme']['global']['backgroundColor'];
 				dragger.style.color = config['theme']['global']['textColor']; 
 				draggerForm.style = 'position: relative; width: 100%;height: 100%; text-align: center; outline-offset: -10px; outline: 2px dashed'+config['theme']['global']['primaryButtonColor']+';';
@@ -1247,6 +1272,31 @@ export default class renderWidget {
 		.tooltiptext div::before{
 			content: "•"; 
 			color: red;
+		}
+
+		.static-value-list{
+			z-index: 1001;
+			position: absolute;
+			background-color: white;
+			max-height: 150px;
+			overflow-y: auto;
+		}
+
+		.static-value-list ul{
+			padding: 0 7px;
+			margin: 10px 0;
+		}
+
+		.static-value-list li{
+			align-items: center;
+			cursor: pointer;
+			display: flex;
+			border-bottom: solid 1px #f2f2f2;
+			padding:  3px;
+		}
+
+		.static-value-list li:hover{
+			background-color: #f2f2f2;
 		}
 
 		`;
@@ -1697,17 +1747,12 @@ export default class renderWidget {
 			}
 		}
 		
-		
 		for (let index = 0; index < msg.length; index++) {
 			var node = document.createElement("div");
 			var textnode = document.createTextNode(msg[index]);
 			node.appendChild(textnode);
 			tooltipSpan.appendChild(node);
 		}
-
-		
-
-	   
 
 	   k.onmouseenter = function(e){
 			/* Normalmente utilizamos hover de CSS para estilizar elementos en los que esta el cursor pero en este caso necesitamos usar onmouseenter */
@@ -1729,6 +1774,7 @@ export default class renderWidget {
 		};
 		return k;
 	}
+
 	//Renderizados de tabla (celdas)
 	loadTable(idx) {
 		let ipage = renderer.excel_data[idx];
@@ -1819,7 +1865,18 @@ export default class renderWidget {
 						cells_sum += 1;
 
 						this.textbox.onfocus = function (e) {
+							
 							renderer.tdCombined(e);
+							document.querySelectorAll(".static-value-list").forEach(el => el.remove());
+							let select_target = document.getElementById('select_all_selector_'+e.target.col);
+							let value_index = select_target.choices.indexOf(select_target.value);
+							if(select_target[value_index].list_options.length > 0){
+								let parent = document.getElementById('page_table');
+								addSelectList(e.target.parentNode,parent,select_target[value_index].list_options,e.target);
+							} else if(e.target.list_options.length > 0){
+								let parent = document.getElementById('page_table');
+								addSelectList(e.target.parentNode,parent,e.target.list_options,e.target);
+							};
 							if (renderer.hasOwnProperty('check_transversal')) {
 								this.editing = renderer.check_transversal;
 							}
@@ -1833,7 +1890,7 @@ export default class renderWidget {
 							e.target.isedited = true;
 							let select_target = document.getElementById('select_all_selector_'+e.target.col);
 							let value_index = select_target.choices.indexOf(select_target.value);
-							if(value_index >= 0){ //validate if the field's map is done
+							if(value_index >= 0 && value_index<(select_target.choices.length-1)){ //validate if the field's map is done
 								renderer.prove(e.target, e.target.col, e.target.row, this.editing, e.target.value, select_target[value_index].trying, e.target.err_msg, false, false,select_target[value_index].re,select_target[value_index].logic);
 							}else{
 								renderer.prove(e.target, e.target.col, e.target.row, this.editing, e.target.value, e.target.trying, e.target.err_msg, false, false,e.target.re,e.target.logic);
@@ -1856,13 +1913,7 @@ export default class renderWidget {
 						tdDiv.appendChild(this.textbox);
 						trDiv.appendChild(tdDiv);
 
-						if (v === null) {
-							this.textbox.trying.push(null);
-							this.textbox.isinvalid = false;
-							this.textbox.falsable = false;
-							continue;
-						}
-						else if (typeof renderer.dom_factor[C] !== 'undefined') { //user validates
+						if (typeof renderer.dom_factor[C] !== 'undefined') { //user validates
 							// ==> Condition for validators critial, unique, regex and empty
 							for (let val = 0; val < (renderer.dom_factor[C].length -1); val++) {
 								if (renderer.dom_factor[C][val].critical !== false) {
@@ -1910,6 +1961,7 @@ export default class renderWidget {
 									this.textbox.readOnly = false;
 									this.textbox.re = renderer.dom_factor[C][val].re;
 									this.textbox.trying.push(['re',renderer.dom_factor[C][val].error]);
+									this.textbox.list_options = renderer.dom_factor[C][val].list;
 									//create table container
 
 									if (v === null) { //unlikely to happen due to previous condition
