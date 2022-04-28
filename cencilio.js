@@ -682,7 +682,7 @@ function table_maker(Options, workbook){
 			let validators = null;
 		}
 	}
-
+	
 	for (var sh = 0; sh < workbook.SheetNames.length; sh++) {
 		try {
 			var sheet = workbook.Sheets[workbook.SheetNames[sh]]; // get the first worksheet
@@ -740,6 +740,7 @@ function table_maker(Options, workbook){
 		let tdLabelSelector = document.createElement('select');
 		tdLabelSelector.id = 'select_all_selector_' + String(vtypei);
 		tdLabelSelector.choices = [];
+		tdLabelSelector.style = 'border: 1px solid '+Options['theme']['global']['primaryButtonColor']+';';
 		
 		tdLabelSelector.onchange = function (e) {
 			try {
@@ -804,7 +805,7 @@ function table_maker(Options, workbook){
 				} else if (renderer.tableSize + 1 === vtypec) {
 					selectOption.value = "Campo " + (vtypei + 1);
 					tdLabelSelector.choices.push("Campo " + (vtypei + 1));
-					selectOption.innerHTML = "Campo " + (vtypei + 1);
+					selectOption.innerHTML = "Seleccionar campo " + (vtypei + 1);
 					selectOption.defaultSelected = true;
 					selectOption.disabled = true;
 					selectOption.list_options = [];						
@@ -995,7 +996,6 @@ export default class renderWidget {
 				invalidKey.style.display = 'block';
 			}
 
-
 		}
 		//Agregamos los scripts externos al body para renderizar el contenido del excel
 		const script_xlsx = document.createElement("script");
@@ -1131,7 +1131,6 @@ export default class renderWidget {
 			border: 0.5px solid #CFD8E5;
 		  }
 		  #sheetFieldSelector select{
-			border: 1px solid #CFD8E5;
 			border-radius: 6px;
 			color: #0A1833;
 			background: none;
@@ -1322,7 +1321,6 @@ export default class renderWidget {
 			ev.preventDefault();
   			if (ev.dataTransfer.items) {
     			var file = ev.dataTransfer.items[0].getAsFile();
-    			console.info('GETTING IT AS FILE', file);
     			renderer.file = file;
     			try{
 					renderer.file_name = file.name;
@@ -1332,7 +1330,6 @@ export default class renderWidget {
 				}
   			} else {
     			var file = ev.dataTransfer.files[0];
-    			console.info('TRANSFERRING DATA');
 				renderFun(file,config);    	
   			}				
 		};
@@ -1374,7 +1371,11 @@ export default class renderWidget {
 		draggerInput.type = 'file';
 		draggerInput.id = 'pIn';
 		draggerInput.accept = '.xlsx, .xls, .csv';
-		draggerInput.style='height: 0.1px; width: 0.1px; z-index: -1; opacity: 0; overflow: hidden; position: absolute;';
+		draggerInput.style='opacity: 0; position: absolute;';
+		draggerInput.hidden = true;
+		draggerForm.addEventListener("click", () =>	{
+			draggerInput.click();
+		});
 		draggerInputsContainer.appendChild(draggerInput);
 		//process data in file
 		draggerInput.onchange = function (e) { 
@@ -1386,7 +1387,7 @@ export default class renderWidget {
 		draggerLabel.htmlFor='pIn';
 		draggerLabel.class='perfil_label';
 		draggerLabel.id='importer-msg';
-		draggerLabel.style = 'margin-top: 10px; cursor: pointer; font-weight:500;';
+		draggerLabel.style = 'margin-top: 10px; cursor: pointer; font-weight:500; width:100%;';
 		draggerInputsContainer.appendChild(draggerLabel);	
 		let draggerSubLabel = document.createElement('p');
 		draggerSubLabel.innerHTML = 'Formatos permitidos CSV, XLSX, XLS' ;
@@ -1873,10 +1874,7 @@ export default class renderWidget {
 							if(select_target[value_index].list_options.length > 0){
 								let parent = document.getElementById('page_table');
 								addSelectList(e.target.parentNode,parent,select_target[value_index].list_options,e.target);
-							} else if(e.target.list_options.length > 0){
-								let parent = document.getElementById('page_table');
-								addSelectList(e.target.parentNode,parent,e.target.list_options,e.target);
-							};
+							} 
 							if (renderer.hasOwnProperty('check_transversal')) {
 								this.editing = renderer.check_transversal;
 							}
