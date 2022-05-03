@@ -251,6 +251,78 @@ function conditionalValidation(logic, value, logic_value) {
 	}
 }
 
+function find_and_replace(ov,nv,col) {
+	let rows = document.getElementById('sheet_rows').childNodes;
+	for (let R = 0; R < rows.length; R++) {
+		const value = rows[R].childNodes[col+1].childNodes[0].value;
+
+		if (value === ov) {
+			rows[R].childNodes[col+1].childNodes[0].value = nv;
+			//Ahora vamos provar/validar
+			let ev = {};
+			ev.target = rows[R].childNodes[col+1].childNodes[0];
+			rows[R].childNodes[col+1].childNodes[0].onblur(ev);
+		}
+	}	
+	document.getElementById('find_replace_cencilio').remove();
+}
+
+function findReplaceModal(originValue,C,list) {
+	
+	let findReplaceModal = document.createElement('div');
+	findReplaceModal.id = 'find_replace_cencilio';
+	findReplaceModal.className = 'modals_cencilio_style';
+	findReplaceModal.style.display = 'block';
+	findReplaceModal.style.height = 'auto';
+
+	let findReplaceTitle = document.createElement('p');
+	findReplaceTitle.className = 'modals_title_cencilio_style';
+	findReplaceTitle.innerHTML = 'Corregir el valor: '+originValue+' en todas las filas en las que exista';
+
+	let findReplaceSubtitle = document.createElement('p');
+	findReplaceSubtitle.className = 'modals_subtitle_cencilio_style';
+	findReplaceSubtitle.id = 'findReplace_subtitle_cencilio_text';
+	findReplaceSubtitle.innerHTML = 'Escribe el nuevo valor por el cual deseas corregir el valor: '+originValue+'; la corrección se aplicara en todas las filas donde exista el valor original';
+
+	let replaceInput = document.createElement('input');
+	replaceInput.type = 'text'
+	replaceInput.className = 'find_replace_input_cencilio';
+	replaceInput.placeholder = 'Escribe el nuevo valor aquí...'
+
+	let findReplaceBtnsDiv = document.createElement('div');
+	findReplaceBtnsDiv.id = 'export_warning_btns_div';
+	findReplaceBtnsDiv.style = 'display: flex;';
+
+	let findReplaceClose = document.createElement('button');
+	findReplaceClose.type='button';
+	findReplaceClose.className = 'modal_btns'; 
+	findReplaceClose.innerHTML = 'CERRAR';
+	findReplaceClose.onclick = function (){
+	document.getElementById('find_replace_cencilio').remove();
+	}
+
+	let findReplaceconfirm = document.createElement('button');
+	findReplaceconfirm.id = 'find_replace_btn';
+	findReplaceconfirm.className = 'modal_btns';
+	findReplaceconfirm.type='button'; 
+	findReplaceconfirm.innerHTML = 'CORREGIR ';
+	findReplaceconfirm.onclick = function () {
+		findReplaceconfirm.classList.add("button-loading-cencilio");
+		setTimeout(() => {
+			find_and_replace(originValue,replaceInput.value,C);
+		}, 2000);
+		
+	};
+
+	findReplaceBtnsDiv.appendChild(findReplaceClose);
+	findReplaceBtnsDiv.appendChild(findReplaceconfirm);
+	findReplaceModal.appendChild(findReplaceTitle);
+	findReplaceModal.appendChild(findReplaceSubtitle);
+	findReplaceModal.appendChild(replaceInput);
+	findReplaceModal.appendChild(findReplaceBtnsDiv);
+	document.body.appendChild(findReplaceModal);
+}
+
 function addSelectList(element, parent, options,destination) {
 	let container_list = document.createElement('div');
 	let list = document.createElement('ul');
@@ -320,7 +392,6 @@ function table_maker(Options, workbook){
 		document.getElementById('spinner').style.display = 'none';
 		return 'validationError';
 	}
-
 	renderer.dom_factor = [];
 	let sheetDiv = document.createElement('div');
 	sheetDiv.id = 'sheet_div';
@@ -867,57 +938,57 @@ function table_maker(Options, workbook){
 	return renderer.split_resp;
 
 }
-function renderFun(file, config){
+function renderFun(file){
 	/*Función que toma la configuración del módulo como argumento
 	y el nombre de archivo cargado mediante drag and drop para renderizar el documento.
 	*/
-	renderer.excel_data = [];
-	renderer.falsable_cells = [] //virtual structure that responds with an error
-
-	try{
-	  	var reader = new FileReader();
-	  	let next_col = false;
-	  	reader.onloadend = function(e) {
-	  		var data = e.target.result;
-	  		data = new Uint8Array(data);
-	  		//process_wb(XLSX.read(data, {type: 'array'}));
-	  		/* read the file */  		
-	  		var workbook = XLSX.read(data, {type: 'array'}); // parse the file
-			//USER BASED
-			table_maker(config, workbook);
-
-		};		
-    	reader.onerror = function (e) {
-    		switch(e.target.error.code) {
-      		case e.target.error.NOT_FOUND_ERR:
-        		console.info('File Not Found!');
-        		break;
-      		case e.target.error.NOT_READABLE_ERR:
-        		console.info('File is not readable');
-        		break;
-      		case e.target.error.ABORT_ERR:
-        		break; 
-      		default:
-        		console.info('An error occurred reading this file.');
-    		};    			
-    	};
-    	reader.onprogress = function (e) {
-			if (e.lengthComputable) {
-			   var percentLoaded = Math.round((e.loaded / e.total) * 100);
-			   	document.getElementById('draggerInputsContainer').style.display = 'none';
-				document.getElementById('spinner').style.display = 'block';
-			}
-    	};
-    	reader.onabort = function (e) {
-      	e.abort();
-    	};    		
-    	reader.onloadstart = function (e) {
-    	};    	  	
-	  	reader.readAsArrayBuffer(file);
-	}
-	catch (error){
-		console.info(error);
-	}
+	return new Promise(function(resolve,reject){
+		renderer.excel_data = [];
+		renderer.falsable_cells = [] //virtual structure that responds with an error
+	
+		try{
+			  var reader = new FileReader();
+			  let next_col = false;
+			  reader.onloadend = function(e) {
+				  var data = e.target.result;
+				  data = new Uint8Array(data);
+				  //process_wb(XLSX.read(data, {type: 'array'}));
+				  /* read the file */  		
+				  var workbook = XLSX.read(data, {type: 'array'}); // parse the file
+				resolve(workbook);
+	
+			};		
+			reader.onerror = function (e) {
+				switch(e.target.error.code) {
+				  case e.target.error.NOT_FOUND_ERR:
+					console.info('File Not Found!');
+					break;
+				  case e.target.error.NOT_READABLE_ERR:
+					console.info('File is not readable');
+					break;
+				  case e.target.error.ABORT_ERR:
+					break; 
+				  default:
+					console.info('An error occurred reading this file.');
+				};    			
+			};
+			reader.onprogress = function (e) {
+				if (e.lengthComputable) {
+				   var percentLoaded = Math.round((e.loaded / e.total) * 100);	
+				}
+			};
+			reader.onabort = function (e) {
+			  e.abort();
+			};    		
+			reader.onloadstart = function (e) {
+			};    	  	
+			  reader.readAsArrayBuffer(file);
+		}
+		catch (error){
+			console.info(error);
+			reject(error);
+		}
+	});
 }
 export default class renderWidget {
   constructor(file,config) {
@@ -1221,7 +1292,7 @@ export default class renderWidget {
 			color: #FFFFFF;
 		  }
 
-		  #confirm_export_btn, #close_button{
+		  #confirm_export_btn, #close_button, #find_replace_btn{
 			background: #07288C; 
 			color: #FFFFFF; 
 		}
@@ -1242,35 +1313,62 @@ export default class renderWidget {
 
 		.tooltiptext {
 			visibility: hidden; 
-			width: 150px; 
+			width: 170px; 
 			font-size: 12px; 
-			background-color: #555; 
-			color: #fff; 
+			background-color: #FFFFFF; 
 			text-align: left; 
 			line-height: 1.2;
 			border-radius: 2px; 
 			padding: 5px 5px; 
 			position: absolute;
 			z-index: 1001;
-			bottom: 125%;
-			left: 50%;
+			bottom: -50%;
+			left: 145%;
 			margin-left: -75px;
 			transition: opacity 0.3s;
+			box-shadow: 3px 6px 29px 1px rgba(0,0,0,0.33);
+			-webkit-box-shadow: 3px 6px 29px 1px rgba(0,0,0,0.33);
+			-moz-box-shadow: 3px 6px 29px 1px rgba(0,0,0,0.33);
 		}
 		.tooltiptext::after {
 			content: "";
 			position: absolute;
-			top: 100%;
-			left: 50%;
-			margin-left: -5px;
-			border-width: 5px;
+			top: 50%;
+			left: -4%;
+			margin-left: -12px;
+			border-width: 10px;
 			border-style: solid;
-			border-color: #555 transparent transparent transparent;
+			border-color: transparent #FFF transparent transparent;
+		}
+		.tooltiptext .tooltips_texts_container {
+			color: red;
+			border-bottom: 1px solid #5555553d;
+			padding-bottom: 6px;
+		}
+		#sheet_rows td:last-child .tooltiptext{
+			left: -57%;
+		}
+		#sheet_rows td:last-child .tooltiptext::after{
+			left: 99%;
+			border-color: transparent transparent transparent #FFF;
+			margin-left: 1px;
 		}
 
-		.tooltiptext div::before{
+		.tooltiptext .tooltips_texts_container div::before{
 			content: "•"; 
 			color: red;
+		}
+
+		.tooltip_btn_replace_all {
+			width: 100%; 
+			border-width: 0px; 
+			border-radius: 5px; 
+			padding: 8px;  
+			background-color: rgb(7, 40, 140); 
+			color: #FFFFFF; 
+			margin-top: 7px;
+			cursor: pointer;
+			text-align: center;
 		}
 
 		.static-value-list{
@@ -1293,10 +1391,44 @@ export default class renderWidget {
 			border-bottom: solid 1px #f2f2f2;
 			padding:  3px;
 		}
+		.find_replace_input_cencilio{
+			width: 100%;
+			margin-top: 20px;
+			border:1px solid;
+		}
 
 		.static-value-list li:hover{
 			background-color: #f2f2f2;
 		}
+		.button-loading-cencilio::after {
+			content: "";
+			position: absolute;
+			width: 16px;
+			height: 16px;
+			border: 3px solid transparent;
+			border-top-color: #ffffff;
+			border-radius: 50%;
+			animation: button-loading-spinner 1s ease infinite;
+		}
+		.spinner-loading-cencilio::after {
+			content: "";
+			position: absolute;
+			width: 16px;
+			height: 16px;
+			border: 3px solid transparent;
+			border-top-color: rgb(7, 40, 140);
+			border-radius: 50%;
+			animation: button-loading-spinner 1s ease infinite;
+		}
+		@keyframes button-loading-spinner {
+			from {
+				transform: rotate(0turn);
+			}
+			to {
+				transform: rotate(1turn);
+			}
+		}
+		
 
 		`;
 		document.head.appendChild(tableStyle);
@@ -1319,19 +1451,17 @@ export default class renderWidget {
 		};
 		dragger.ondrop = function(ev) {
 			ev.preventDefault();
-  			if (ev.dataTransfer.items) {
-    			var file = ev.dataTransfer.items[0].getAsFile();
-    			renderer.file = file;
-    			try{
-					renderer.file_name = file.name;
-					renderFun(file,config);  
-				}
-				catch (error){				
-				}
-  			} else {
-    			var file = ev.dataTransfer.files[0];
-				renderFun(file,config);    	
-  			}				
+			document.getElementById('draggerInputsContainer').style.display = 'none';
+			document.getElementById('spinner').style.display = 'block';
+			var file = (ev.dataTransfer.items) ? ev.dataTransfer.items[0].getAsFile() : ev.dataTransfer.files[0];
+			renderer.file = file;
+			renderer.file_name = file.name;
+			renderFun(file).then(resolve => {
+				setTimeout(() => {
+					table_maker(config, resolve);
+				}, 500);
+			});  
+			
 		};
 		let draggerForm = document.createElement('form');	
 		draggerForm.className = 'pimg';
@@ -1373,15 +1503,23 @@ export default class renderWidget {
 		draggerInput.accept = '.xlsx, .xls, .csv';
 		draggerInput.style='opacity: 0; position: absolute;';
 		draggerInput.hidden = true;
-		draggerForm.addEventListener("click", () =>	{
-			draggerInput.click();
-		});
 		draggerInputsContainer.appendChild(draggerInput);
 		//process data in file
 		draggerInput.onchange = function (e) { 
+			document.getElementById('draggerInputsContainer').style.display = 'none';
+			document.getElementById('spinner').classList.add("spinner-loading-cencilio");
+			document.getElementById('spinner').style.display = 'block'; //spinner-loading-cencilio
 			renderer.file_name = this.files[0].name;
-			renderFun(this.files[0], config);
+			renderFun(this.files[0]).then(resolve =>{
+				setTimeout(() => {
+					table_maker(config, resolve);
+				}, 500);
+				
+			});  
 		};
+		draggerForm.addEventListener("click", () =>	{
+			draggerInput.click();
+		});
 		let draggerLabel = document.createElement('label');	
 		draggerLabel.appendChild(document.createTextNode("Arrastra tu archivo aquí o haz click para cargar"));
 		draggerLabel.htmlFor='pIn';
@@ -1738,22 +1876,41 @@ export default class renderWidget {
 				- msg: mensaje para mostrar	
 		*/
 		if(k.childNodes.length === 1 ){
-			var tooltipSpan = document.createElement('div');
-			tooltipSpan.className = "tooltiptext";									
-			k.appendChild(tooltipSpan);
+			var tooltipWrapper = document.createElement('div');
+			tooltipWrapper.className = "tooltiptext";									
+			k.appendChild(tooltipWrapper);
 		} else if(k.childNodes.length > 1) {
-			var tooltipSpan = k.childNodes[1];
-			while (tooltipSpan.firstChild) {
-				tooltipSpan.removeChild(tooltipSpan.firstChild);
+			var tooltipWrapper = k.childNodes[1];
+			while (tooltipWrapper.firstChild) {
+				tooltipWrapper.removeChild(tooltipWrapper.firstChild);
 			}
 		}
 		
-		for (let index = 0; index < msg.length; index++) {
+		let tooltip_texts_container = document.createElement('div');
+		tooltip_texts_container.className = "tooltips_texts_container";
+
+		for (var index = 0; index < msg.length; index++) {
 			var node = document.createElement("div");
 			var textnode = document.createTextNode(msg[index]);
 			node.appendChild(textnode);
-			tooltipSpan.appendChild(node);
+			tooltip_texts_container.appendChild(node);
 		}
+
+		let tooltip_btns_container = document.createElement('div');
+		tooltip_btns_container.className = "tooltips_btns_container";
+
+		let tooltip_btn_replace_all = document.createElement('div');
+		tooltip_btn_replace_all.className = "tooltip_btn_replace_all";
+		tooltip_btn_replace_all.innerText = "Corregir varias veces";
+		tooltip_btn_replace_all.addEventListener("click", ()=>{
+			findReplaceModal(k.childNodes[0].value, k.childNodes[0].col);
+		});
+
+		tooltipWrapper.appendChild(tooltip_texts_container);
+		tooltip_btns_container.appendChild(tooltip_btn_replace_all);
+		tooltipWrapper.appendChild(tooltip_btns_container);
+		
+
 
 	   k.onmouseenter = function(e){
 			/* Normalmente utilizamos hover de CSS para estilizar elementos en los que esta el cursor pero en este caso necesitamos usar onmouseenter */
@@ -1893,15 +2050,16 @@ export default class renderWidget {
 							}else{
 								renderer.prove(e.target, e.target.col, e.target.row, this.editing, e.target.value, e.target.trying, e.target.err_msg, false, false,e.target.re,e.target.logic);
 							}
-							e.target.isedited = false; // undestand why is falsed afte prove() function
-							renderer.excel_data[this.editing][e.target.row][e.target.col] = e.target.value;
-							renderer.deep_excel_data[this.editing][e.target.row][e.target.col] = e.target.value;
 							if (renderer.hasOwnProperty('check_transversal')) {
 								this.editing = renderer.check_transversal; //user basis
 							}
 							else {
 								this.editing = renderer.page; //program basis
 							}
+							e.target.isedited = false; // undestand why is falsed afte prove() function
+							renderer.excel_data[this.editing][e.target.row][e.target.col] = e.target.value;
+							renderer.deep_excel_data[this.editing][e.target.row][e.target.col] = e.target.value;
+
 							if (e.target.isinvalid === true) {
 								e.target.style.backgroundColor = renderer.config['theme']['global']['errorColor'];
 							}
