@@ -10,6 +10,7 @@ class DOMNodeFactors {
 	this.error = '';
 	this.logic = [];
 	this.list = [];
+	this.format_type = '';
   }
 }
 class ElReqs {
@@ -323,6 +324,98 @@ function findReplaceModal(originValue,C,list) {
 	document.body.appendChild(findReplaceModal);
 }
 
+function fix_formatting(format_type, col) {
+	let rows = document.getElementById('sheet_rows').childNodes;
+	for (let R = 0; R < rows.length; R++) {
+		const value = rows[R].childNodes[col+1].childNodes[0].value;
+		var fixed_value = fix_format_handler(format_type, value);	
+		if (fixed_value !== false) {
+			rows[R].childNodes[col+1].childNodes[0].value = fixed_value;
+			//Ahora vamos provar/validar
+			let ev = {};
+			ev.target = rows[R].childNodes[col+1].childNodes[0];
+			rows[R].childNodes[col+1].childNodes[0].onblur(ev);
+		}
+	}	
+}
+function fix_format_handler(format_type, value) {
+	switch (format_type) {
+		case "date_2_2_4_dash": //dd-mm-yyyy
+			return format_date_dd_mm_yyyy_dash(value);
+		case "date_2_2_4_slash": //dd/mm/yyyy
+			return format_date_dd_mm_yyyy_slash(value);
+		case "date_4_2_2_dash": //yyyy-mm-dd
+			return format_date_yyyy_mm_dd_dash(value);
+		case "date_4_2_2_slash": //yyyy/mm/dd
+			return format_date_yyyy_mm_dd_slash(value)
+
+		default:
+			return false;
+	}
+}
+function check_date(value) { //support dates like: yyyy/mm/dd,yyyy/m/d,dd/mm/yyyy,d/m/yyyy,dd/mm/yy,d/m/yy. Not support yy/mm/dd
+	var date_values = value.split(/[ :\-\/]/g);
+    var year = (date_values[0].length ==4) ? date_values[0]: date_values[2];
+    var day = (date_values[0].length ==4) ? date_values[2]: date_values[0];
+  		var possible_date = new Date(
+			year,  // year
+			date_values[1] - 1,  // monthIndex
+			day  // day
+		);
+	if (possible_date.getFullYear() < 1970) {
+		possible_date.setFullYear(possible_date.getFullYear() + 100);
+	}
+	if (possible_date instanceof Date && !isNaN(possible_date.valueOf())) {
+		return { is_date: true, date: possible_date };
+	} else {
+		return { is_date: false };
+	}
+}
+function format_date_dd_mm_yyyy_dash(value) {
+	var validated_value = check_date(value);
+	if (validated_value.is_date) {
+		//Sí se pudo validar que es una fecha y se va a transformar según el formato
+		var local_date = validated_value.date.toLocaleDateString("es", { day: "2-digit", month: "2-digit", year: "numeric" });
+		var formatted_date = local_date.replaceAll("/", "-");
+		return formatted_date;
+	} else {
+		return false;
+	}
+}
+function format_date_yyyy_mm_dd_dash(value) {
+	var validated_value = check_date(value);
+	  if (validated_value.is_date) {
+		  //Sí se pudo validar que es una fecha y se va a transformar según el formato
+		  var local_date = validated_value.date.toISOString().split('T')[0];
+		  return local_date;
+	  } else {
+		  return false;
+	  }
+}
+function format_date_dd_mm_yyyy_slash(value) {
+	var validated_value = check_date(value);
+	if (validated_value.is_date) {
+		//Sí se pudo validar que es una fecha y se va a transformar según el formato
+		var local_date = validated_value.date.toLocaleDateString("es", { day: "2-digit", month: "2-digit", year: "numeric" });
+		return local_date;
+	} else {
+		return false;
+	}
+}
+function format_date_yyyy_mm_dd_slash(value) {
+	function format_date_dd_mm_yyyy_slash(value) {
+		var validated_value = check_date(value);
+		if (validated_value.is_date) {
+			//Sí se pudo validar que es una fecha y se va a transformar según el formato
+			var local_date = validated_value.date.toLocaleDateString("es", { day: "2-digit", month: "2-digit", year: "numeric" });
+			var formatted_date = local_date.replaceAll("-","/");
+			return formatted_date;
+		} else {
+			return false;
+		}
+	}
+}
+
 function addSelectList(element, parent, options,destination) {
 	let container_list = document.createElement('div');
 	let list = document.createElement('ul');
@@ -392,7 +485,6 @@ function table_maker(Options, workbook){
 		document.getElementById('spinner').style.display = 'none';
 		return 'validationError';
 	}
-	renderer.dom_factor = [];
 	let sheetDiv = document.createElement('div');
 	sheetDiv.id = 'sheet_div';
 	document.body.appendChild(sheetDiv);
@@ -723,10 +815,11 @@ function table_maker(Options, workbook){
 						validators.regex = true;
 						renderer.ndata.re = fields[j]['validators'][set].regex;
 						renderer.ndata.list.push(...fields[j]['validators'][set].list);
+						renderer.ndata.format_type = fields[j]['validators'][set]['format_type'];
 					}
 					if (fields[j]['validators'][set]['validate'] === 'conditional') {
 						validators.conditional = true;
-						renderer.ndata.logic.push(...fields[j]['validators'][set].logics);
+						renderer.ndata.logic.push(...fields[j]['validators'][set].logics);						
 					}
 					if (typeof fields[j]['validators'][set]['error'] !== 'undefined') {
 						validators.error = true;
@@ -753,7 +846,7 @@ function table_maker(Options, workbook){
 			let validators = null;
 		}
 	}
-	
+
 	for (var sh = 0; sh < workbook.SheetNames.length; sh++) {
 		try {
 			var sheet = workbook.Sheets[workbook.SheetNames[sh]]; // get the first worksheet
@@ -825,25 +918,28 @@ function table_maker(Options, workbook){
 				} else if(e.target.prev !== '--' && e.target.value === '--'){
 					for (var vtypec = 1; vtypec <= this.selectors.length - 1; ++vtypec) {
 						this.selectors[vtypec].childNodes[0].childNodes[0].childNodes[e.target.choices.indexOf(e.target.prev)].disabled = false;
-					}
-					
+					}	
 				} else if (e.target.prev !== '--' && e.target.value !== '--') {
 					for (var vtypec = 1; vtypec <= this.selectors.length - 1; ++vtypec) {
 						this.selectors[vtypec].childNodes[0].childNodes[0].childNodes[e.target.choices.indexOf(e.target.prev)].disabled = false;
 						this.selectors[vtypec].childNodes[0].childNodes[0].childNodes[e.target.choices.indexOf(e.target.value)].disabled = true;
 					}
 				}
-
 				e.target.prev = e.target.value;
+				this.validating = false;
+				this.pure = true;
 				if (typeof renderer.check_transversal === 'undefined') {
 					this.editing = renderer.check_transversal; //user basis
 				}
 				else {
 					this.editing = renderer.page; //program basis
 				}
+				if (e.target.value === '--' || e.target.childNodes[dom_index].format_type === 'general') {
+					e.target.parentNode.childNodes[1].disabled = true;
+				} else {
+					e.target.parentNode.childNodes[1].disabled = false;
+				}
 
-				this.validating = false;
-				this.pure = true;
 				if(dom_index < (e.target.choices.length-2)){
 					let dom_length = renderer.dom_factor[dom_index].length;
 					if (renderer.dom_factor[dom_index][dom_length-1] !== null) {
@@ -900,6 +996,7 @@ function table_maker(Options, workbook){
 								selectOption.trying.push(['re', renderer.dom_factor[vtypec][index].error]);
 								selectOption.re = renderer.dom_factor[vtypec][index].re;
 								selectOption.list_options = renderer.dom_factor[vtypec][index].list;
+								selectOption.format_type = renderer.dom_factor[vtypec][index].format_type;
 							} else if (renderer.dom_factor[vtypec][index].logic.length !== 0) {
 								selectOption.trying.push(['conditional', renderer.dom_factor[vtypec][index].error]);
 								selectOption.logic = renderer.dom_factor[vtypec][index].logic;
@@ -918,6 +1015,21 @@ function table_maker(Options, workbook){
 			}
 		};
 		tdLabelShiftDiv.appendChild(tdLabelSelector);
+		let fix_btn = document.createElement('button');
+		fix_btn.type = 'button';
+		fix_btn.id = 'fix-formatting-btn-cencilio';
+		fix_btn.disabled = true;
+		fix_btn.onclick = function (e) {
+			var select_target = e.target.parentNode.childNodes[0];
+			var col_id = (select_target.id).split("_");
+			var value_index = select_target.selectedIndex;
+			var col = parseInt(col_id[3]);
+			var format_type = select_target[value_index].format_type;
+			//var format_type = "date_2_2_4_dash";
+			fix_formatting(format_type,col);
+		};
+		tdLabelShiftDiv.appendChild(fix_btn);
+
 		tdFieldSelector.appendChild(tdLabelShiftDiv);
 		tdFieldSelector.id = 'selectortd_' + vtypei;
 		if (Utils.findChildById(sheetFieldSelector, tdLabelSelector.id, true) !== null) {
@@ -1036,7 +1148,7 @@ export default class renderWidget {
 						nObj['validators'].push({"validate":'required', "error":e.ErrorMsg[0]});
 					}
 					if(e.Regex !== undefined){
-						nObj['validators'].push({"validate":'regex_match','regex':e.Regex,"list":options, "error":e.ErrorMsg[2]});
+						nObj['validators'].push({"validate":'regex_match','regex':e.Regex,"list":options,"format_type":e.Format_Type, "error":e.ErrorMsg[2]});
 					}
 					if(e.Conditional){
 						nObj['validators'].push({"validate":'conditional','logics':e.Logics, "error":e.ErrorMsg[3]});
@@ -1055,14 +1167,14 @@ export default class renderWidget {
 				};
 				dragger.style.backgroundColor = config['theme']['global']['backgroundColor'];
 				dragger.style.color = config['theme']['global']['textColor']; 
-				draggerForm.style = 'position: relative; width: 100%;height: 100%; text-align: center; outline-offset: -10px; outline: 2px dashed'+config['theme']['global']['primaryButtonColor']+';';
+				draggerForm.style = 'outline: 2px dashed'+config['theme']['global']['primaryButtonColor']+';';
 				draggerImg2.setAttribute('stroke', config['theme']['global']['primaryButtonColor']);
 				draggerInputsContainer.style.display = 'block';
 
 			} else if(xhr.status === 400 || xhr.status === 401 ){
 				dragger.style.backgroundColor = '#F3F9FF';
 				dragger.style.color = '#F97F7F'; 
-				draggerForm.style = 'position: relative; width: 100%;height: 100%; text-align: center; outline-offset: -10px; outline: 2px dashed #F97F7F;';
+				draggerForm.style = 'outline: 2px dashed #F97F7F;';
 				draggerInputsContainer.style.display = 'none';
 				invalidKey.style.display = 'block';
 			}
@@ -1079,6 +1191,25 @@ export default class renderWidget {
 		document.body.appendChild(script_shim);
 		let tableStyle = document.createElement('style');
 		tableStyle.innerHTML = `
+		#cencilio-importer{
+			width: 100%;
+			height:220px;
+		}
+
+		#form_cencilio {
+			cursor: pointer;
+			position: relative; 
+			width: 100%;
+			height: 100%; 
+			text-align: center;
+			outline-offset: -10px;  
+		}
+		#api_error, #draggerInputsContainer, #spinner{
+			position: relative; 
+			top: 50%; 
+			transform: translateY(-50%); 
+			display: none;
+		}
 		#sheet_div{
 			overflow-x: hidden; 
 			position: absolute;
@@ -1201,10 +1332,22 @@ export default class renderWidget {
 			padding: 10px 12px;
 			border: 0.5px solid #CFD8E5;
 		  }
+		  #sheetFieldSelector th div {
+			  display:flex;
+		  }
 		  #sheetFieldSelector select{
 			border-radius: 6px;
 			color: #0A1833;
 			background: none;
+		  }
+		  #sheetFieldSelector #fix-formatting-btn-cencilio{
+			font-size :10px;
+			background: transparent;
+			border: 0px;
+
+		  }
+		  #sheetFieldSelector #fix-formatting-btn-cencilio::before{
+			content: "✔ ";
 		  }
 		  #sheetFieldSelector th:first-child{
 			padding: 5px 30px 5px 14px;
@@ -1227,6 +1370,7 @@ export default class renderWidget {
 		  #sheet_rows input[type="text"]{
 		  border: transparent;
 		  height: 34px;
+		  width:180px;
 		  }
 		  #sheet_rows input:focus{
 			outline:solid 1px #2A438C;
@@ -1434,14 +1578,9 @@ export default class renderWidget {
 		document.head.appendChild(tableStyle);
 		let invalidKey = document.createElement('div');
 		invalidKey.id = 'api_error';
-		invalidKey.style = 'position: relative; top: 50%; transform: translateY(-50%); display: none;';
 		invalidKey.innerHTML = 'Error de credenciales: valida tu API key en app.cencilio.com';
 		
 		let dragger = document.getElementById('cencilio-importer');	
-		dragger.className = 'dragger';
-		dragger.style.width = '100%';
-		dragger.style.height = '220px'; 
-
 		dragger.draggable = true;
 		dragger.ondragstart = function (event) {
     	event.dataTransfer.setData('application/vnd.ms-excel', null);
@@ -1464,12 +1603,10 @@ export default class renderWidget {
 			
 		};
 		let draggerForm = document.createElement('form');	
-		draggerForm.className = 'pimg';
-		draggerForm.id = 'pimg';
+		draggerForm.id = 'form_cencilio';
 		draggerForm.enctype = 'multipart/form-data';
 		let draggerInputsContainer = document.createElement('div');
 		draggerInputsContainer.id= 'draggerInputsContainer';
-		draggerInputsContainer.style = 'position: relative; top: 50%; transform: translateY(-50%);display:none;';
 
 		let draggerImg2 = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 		let iconPath = document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -1537,7 +1674,6 @@ export default class renderWidget {
 		let draggerSpinner = document.createElement('div');
 		draggerSpinner.appendChild(document.createTextNode("Cargando..."));
 		draggerSpinner.id = 'spinner';	
-		draggerSpinner.style = 'position: relative; top: 50%; transform: translateY(-50%); display: none;';
 		draggerInputsContainer.appendChild(excelButton);
 		draggerForm.appendChild(draggerSpinner);
 		draggerForm.appendChild(draggerInputsContainer);	
